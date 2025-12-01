@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 
 const HomeScreen = ({ navigation }) => {
   const handleScanWaste = () => {
-    navigation.navigate('CameraScreen');
+    navigation.navigate('Camera');
   };
 
   return (

@@ -102,7 +102,7 @@ const ResultsScreen = ({ route, navigation }) => {
           {/* Scan Again Button */}
           <TouchableOpacity
             style={[styles.button, styles.scanAgainButton]}
-            onPress={() => navigation.navigate('CameraScreen')}
+            onPress={() => navigation.navigate('Camera')}
           >
             <Text style={styles.scanAgainButtonText}>📷 Scan Again</Text>
           </TouchableOpacity>
@@ -110,7 +110,7 @@ const ResultsScreen = ({ route, navigation }) => {
           {/* Home Button */}
           <TouchableOpacity
             style={[styles.button, styles.homeButton]}
-            onPress={() => navigation.navigate('HomeScreen')}
+            onPress={() => navigation.navigate('Home')}
           >
             <Text style={styles.homeButtonText}>🏠 Home</Text>
           </TouchableOpacity>

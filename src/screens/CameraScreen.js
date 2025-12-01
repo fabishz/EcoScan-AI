@@ -191,8 +191,9 @@ const CameraScreen = ({ navigation }) => {
       
       // Navigate to results screen with captured image and classification
       navigation.navigate('Results', {
-        imageUri: photo.uri,
-        classification: finalResult
+        capturedImage: photo.uri,
+        category: finalResult.category,
+        confidence: finalResult.confidence
       });
       
     } catch (error) {

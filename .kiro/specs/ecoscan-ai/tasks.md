@@ -39,7 +39,7 @@ This implementation plan breaks down the EcoScan AI MVP into discrete, manageabl
   - Add app logo or icon placeholder
   - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 5. Create Camera Screen component with real-time inference
+- [x] 5. Create Camera Screen component with real-time inference
   - Create `src/screens/CameraScreen.js` as a functional React component with hooks
   - Implement camera permission request using `expo-camera` and`expo-permissions`
   - Display live camera feed using `Camera` component from `expo-camera`
@@ -50,7 +50,7 @@ This implementation plan breaks down the EcoScan AI MVP into discrete, manageabl
   - Add comments explaining Arm optimization (inference throttling, quantized model)
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 6. Create Results Screen component
+- [x] 6. Create Results Screen component
   - Create `src/screens/ResultsScreen.js` as a functional React component
   - Display captured image preview
   - Display classification category with visual badge (color-coded: green for Recyclable, brown for Compostable, gray for Trash, yellow for Unknown)
@@ -60,7 +60,7 @@ This implementation plan breaks down the EcoScan AI MVP into discrete, manageabl
   - Implement "Home" button to navigate back to HomeScreen
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 7. Set up React Navigation and integrate all screens
+- [-] 7. Set up React Navigation and integrate all screens
   - Create `src/navigation/RootNavigator.js` with stack navigation
   - Configure navigation stack: HomeScreen → CameraScreen → ResultsScreen
   - Pass navigation props to all screens
