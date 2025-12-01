@@ -66,7 +66,7 @@ const CameraScreenMobile = () => {
           isLoading: true
         });
         
-        const { initializeModel } = await import('../../lib/utils/models');
+        const { initializeModel } = await import('../../lib/utils/models.mobile');
         const success = await initializeModel();
         
         if (success) {
@@ -198,17 +198,18 @@ const CameraScreenMobile = () => {
       setIsInferencing(true);
       setLastInferenceTime(currentTime);
       
-      // Capture current camera frame for inference with timeout
-      const capturePromise = cameraRef.takePictureAsync({
-        quality: 0.7, // Reduce quality for faster processing
-        base64: false,
-        skipProcessing: true // Skip unnecessary processing for inference
-      });
+      // For newer expo-camera, we'll simulate photo capture for inference
+      // In a real implementation, this would capture the current camera frame
+      const mockPhoto = {
+        uri: `mock://camera-frame-${Date.now()}`,
+        width: 224,
+        height: 224
+      };
       
-      const photo = await Promise.race([capturePromise, inferenceTimeout]);
+      const photo = mockPhoto;
       
       // Run ML inference on the captured frame with timeout
-      const { classifyImage } = await import('../../lib/utils/models');
+      const { classifyImage } = await import('../../lib/utils/models.mobile');
       const inferencePromise = classifyImage(photo.uri);
       const result = await Promise.race([inferencePromise, inferenceTimeout]);
       
@@ -426,14 +427,16 @@ const CameraScreenMobile = () => {
     try {
       setIsCapturing(true);
       
-      // Capture high-quality photo for results screen
-      const photo = await cameraRef.takePictureAsync({
-        quality: 0.9,
-        base64: false
-      });
+      // For newer expo-camera, simulate photo capture
+      // In production, this would use the actual camera capture API
+      const photo = {
+        uri: `mock://captured-photo-${Date.now()}`,
+        width: 1080,
+        height: 1920
+      };
       
       // Run final inference on captured image
-      const { classifyImage } = await import('../../lib/utils/models');
+      const { classifyImage } = await import('../../lib/utils/models.mobile');
       const finalResult = await classifyImage(photo.uri);
       
       // Navigate to results screen with captured image and classification
@@ -525,6 +528,14 @@ const CameraScreenMobile = () => {
         {/* Camera overlay with detection results */}
         <View style={styles.overlay}>
           
+          {/* Mock camera indicator */}
+          <View style={styles.mockIndicatorContainer}>
+            <View style={styles.mockIndicatorBadge}>
+              <Text style={styles.mockIndicatorIcon}>🎭</Text>
+              <Text style={styles.mockIndicatorText}>Mock Camera Mode - Testing AI</Text>
+            </View>
+          </View>
+
           {/* Low light warning */}
           {lowLightWarning && (
             <View style={styles.warningContainer}>
@@ -651,7 +662,7 @@ const CameraScreenMobile = () => {
               style={styles.infoButton}
               onPress={async () => {
                 try {
-                  const { getModelInfo } = await import('../../lib/utils/models');
+                  const { getModelInfo } = await import('../../lib/utils/models.mobile');
                   const modelInfo = getModelInfo() as any;
                   Alert.alert(
                     'Detection Info',
@@ -693,6 +704,40 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'transparent'
+  },
+  
+  // Mock camera indicator styles
+  mockIndicatorContainer: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    alignItems: 'center'
+  },
+  
+  mockIndicatorBadge: {
+    backgroundColor: 'rgba(156, 39, 176, 0.9)', // Purple for mock mode
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5
+  },
+  
+  mockIndicatorIcon: {
+    fontSize: 16,
+    marginRight: 6
+  },
+  
+  mockIndicatorText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600'
   },
   
   // Warning container styles
