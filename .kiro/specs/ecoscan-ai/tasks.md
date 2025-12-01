@@ -31,7 +31,7 @@ This implementation plan breaks down the EcoScan AI MVP into discrete, manageabl
   - Ensure tips are actionable and personalized (e.g., "Recycle this plastic bottle to save energy—repurpose it as a vase!")
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 4. Create Home Screen component
+- [x] 4. Create Home Screen component
   - Create `src/screens/HomeScreen.js` as a functional React component
   - Display app title "EcoScan AI" and brief description
   - Implement "Scan Waste" button that navigates to CameraScreen
@@ -41,7 +41,7 @@ This implementation plan breaks down the EcoScan AI MVP into discrete, manageabl
 
 - [ ] 5. Create Camera Screen component with real-time inference
   - Create `src/screens/CameraScreen.js` as a functional React component with hooks
-  - Implement camera permission request using `expo-camera` and `expo-permissions`
+  - Implement camera permission request using `expo-camera` and`expo-permissions`
   - Display live camera feed using `Camera` component from `expo-camera`
   - Implement inference scheduling: run inference every 1-2 seconds (not every frame) using `setInterval` or `useEffect` with throttling
   - Display current detection result (category and confidence) as overlay on camera feed
