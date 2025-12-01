@@ -445,7 +445,9 @@ const CameraScreenMobile = () => {
         params: {
           capturedImage: photo.uri,
           category: (finalResult as any).category,
-          confidence: (finalResult as any).confidence.toString()
+          confidence: (finalResult as any).confidence.toString(),
+          timestamp: (finalResult as any).timestamp?.toString() || Date.now().toString(),
+          reasoning: (finalResult as any).reasoning || 'AI analysis completed'
         }
       });
       

@@ -25,6 +25,50 @@ import { generateTip } from '../lib/utils/tipGenerator';
 const { width } = Dimensions.get('window');
 
 /**
+ * Generate a mock image representation for testing
+ * Creates a visual placeholder that represents the classified object
+ */
+const generateMockImage = (category: string, confidence: number) => {
+  // For React Native, we'll use a simpler approach
+  // Return a special identifier that we'll handle in the render
+  return `mock-image://${category}/${Math.round(confidence * 100)}`;
+};
+
+/**
+ * Get detailed AI analysis description
+ */
+const getAnalysisDescription = (category: string, confidence: number) => {
+  const timeOfDay = new Date().getHours();
+  const isHighConfidence = confidence > 0.8;
+  
+  const baseDescriptions = {
+    'Recyclable': isHighConfidence 
+      ? 'Clear recyclable material detected with high certainty. The AI identified characteristic features of plastic, metal, or paper materials.'
+      : 'Likely recyclable material detected. Some features suggest recyclable content, but lighting or angle may affect accuracy.',
+    'Compostable': isHighConfidence
+      ? 'Organic material clearly identified. The AI detected biodegradable characteristics typical of food waste or natural materials.'
+      : 'Probable organic waste detected. Material appears biodegradable but may need closer inspection.',
+    'Trash': isHighConfidence
+      ? 'Non-recyclable waste identified with high confidence. Material shows mixed composition or contamination.'
+      : 'Appears to be general waste. Mixed materials or unclear composition detected.',
+    'Unknown': 'Object unclear - the AI needs better lighting, different angle, or closer view for accurate classification.'
+  };
+  
+  let description = baseDescriptions[category as keyof typeof baseDescriptions] || baseDescriptions['Unknown'];
+  
+  // Add time-based context
+  if (timeOfDay >= 6 && timeOfDay <= 10) {
+    description += ' Morning waste patterns suggest breakfast-related items.';
+  } else if (timeOfDay >= 11 && timeOfDay <= 14) {
+    description += ' Lunch-time classification indicates food packaging or containers.';
+  } else if (timeOfDay >= 17 && timeOfDay <= 21) {
+    description += ' Evening analysis suggests dinner-related waste materials.';
+  }
+  
+  return description;
+};
+
+/**
  * Results Screen Component
  */
 const ResultsScreen = () => {
@@ -38,6 +82,11 @@ const ResultsScreen = () => {
   // Handle missing or invalid data
   const hasValidData = capturedImage && category;
   const isErrorResult = error || category === 'Unknown' || !hasValidData;
+  
+  // Generate mock image for display if using mock camera
+  const displayImage = capturedImage?.startsWith('mock://') 
+    ? generateMockImage(category as string, confidenceValue)
+    : capturedImage;
   
   // Generate personalized eco-tip based on classification category
   const ecoTip = generateTip((category as string) || 'Unknown');
@@ -71,10 +120,22 @@ const ResultsScreen = () => {
         
         {/* Captured Image Preview */}
         <View style={styles.imageContainer}>
-          {capturedImage ? (
-            <Image source={{ uri: capturedImage as string }} style={styles.capturedImage} />
+          {displayImage ? (
+            <View style={styles.imageWrapper}>
+              <Image 
+                source={{ uri: displayImage as string }} 
+                style={styles.capturedImage}
+                resizeMode="contain"
+              />
+              {capturedImage?.startsWith('mock://') && (
+                <View style={styles.mockImageBadge}>
+                  <Text style={styles.mockImageText}>🎭 Mock Result</Text>
+                </View>
+              )}
+            </View>
           ) : (
             <View style={styles.imagePlaceholder}>
+              <Text style={styles.placeholderIcon}>📷</Text>
               <Text style={styles.placeholderText}>No image captured</Text>
             </View>
           )}
@@ -103,13 +164,41 @@ const ResultsScreen = () => {
             </View>
           </View>
           
-          {/* Confidence Score - only show if we have valid confidence */}
+          {/* Confidence Score with enhanced details */}
           {confidenceValue !== undefined && confidenceValue > 0 && (
             <View style={styles.confidenceSection}>
-              <Text style={styles.confidenceLabel}>Confidence:</Text>
-              <Text style={styles.confidenceValue}>{confidencePercentage}%</Text>
+              <Text style={styles.confidenceLabel}>AI Confidence:</Text>
+              <View style={styles.confidenceDetails}>
+                <Text style={styles.confidenceValue}>{confidencePercentage}%</Text>
+                <View style={styles.confidenceBar}>
+                  <View 
+                    style={[
+                      styles.confidenceProgress, 
+                      { 
+                        width: `${confidencePercentage}%`,
+                        backgroundColor: confidenceValue > 0.8 ? '#4CAF50' : 
+                                       confidenceValue > 0.6 ? '#FF9800' : '#FFC107'
+                      }
+                    ]} 
+                  />
+                </View>
+                <Text style={styles.confidenceDescription}>
+                  {confidenceValue > 0.9 ? 'Very High' :
+                   confidenceValue > 0.8 ? 'High' :
+                   confidenceValue > 0.6 ? 'Good' :
+                   confidenceValue > 0.4 ? 'Moderate' : 'Low'} Accuracy
+                </Text>
+              </View>
             </View>
           )}
+          
+          {/* AI Analysis Details */}
+          <View style={styles.analysisSection}>
+            <Text style={styles.analysisTitle}>🧠 AI Analysis</Text>
+            <Text style={styles.analysisText}>
+              {getAnalysisDescription(category as string, confidenceValue)}
+            </Text>
+          </View>
           
           {/* Low confidence warning */}
           {confidenceValue !== undefined && confidenceValue > 0 && confidenceValue < 0.5 && (
@@ -173,11 +262,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  capturedImage: {
+  imageWrapper: {
+    position: 'relative',
     width: width - 40,
-    height: (width - 40) * 0.75, // 4:3 aspect ratio
+    height: (width - 40) * 0.75,
+  },
+  capturedImage: {
+    width: '100%',
+    height: '100%',
     borderRadius: 12,
-    resizeMode: 'cover',
+    backgroundColor: '#f5f5f5',
+  },
+  mockImageBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(156, 39, 176, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  mockImageText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
   },
   imagePlaceholder: {
     width: width - 40,
@@ -186,6 +294,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  placeholderIcon: {
+    fontSize: 48,
+    marginBottom: 8,
   },
   placeholderText: {
     color: '#757575',
@@ -225,19 +337,58 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   confidenceSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginBottom: 15,
   },
   confidenceLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginRight: 10,
+    marginBottom: 8,
+  },
+  confidenceDetails: {
+    alignItems: 'flex-start',
   },
   confidenceValue: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#2E7D32',
+    marginBottom: 8,
+  },
+  confidenceBar: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    marginBottom: 6,
+    overflow: 'hidden',
+  },
+  confidenceProgress: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  confidenceDescription: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  analysisSection: {
+    backgroundColor: '#F3E5F5',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: '#9C27B0',
+  },
+  analysisTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#7B1FA2',
+    marginBottom: 8,
+  },
+  analysisText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#4A148C',
   },
   errorSection: {
     flexDirection: 'row',
