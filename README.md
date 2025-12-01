@@ -164,30 +164,37 @@ npx expo build:ios
 
 ## Project Structure
 
-### Expo Router Structure (TypeScript)
+### Professional Folder Organization
 ```
-app/
-├── _layout.tsx          # Root layout with navigation setup
-├── (tabs)/
-│   ├── _layout.tsx      # Tab navigation layout
-│   └── index.tsx        # Home screen (main tab)
-├── camera.tsx           # Camera screen for scanning
-└── results.tsx          # Results screen with classification
+impl/
+├── 📱 app/                    # Expo Router screens
+│   ├── (tabs)/               # Tab navigation
+│   ├── platforms/            # Platform-specific implementations
+│   │   ├── camera.mobile.tsx # Mobile camera (expo-camera)
+│   │   └── camera.web.tsx    # Web camera (file upload)
+│   ├── _layout.tsx           # Root navigation layout
+│   ├── camera.tsx            # Platform-aware camera router
+│   └── results.tsx           # Classification results screen
+├── 🛠️ lib/                    # Shared library code
+│   ├── components/           # Reusable UI components
+│   │   ├── ErrorBoundary.js  # Runtime error handling
+│   │   └── WebCamera.tsx     # Web camera component
+│   └── utils/               # Utility functions
+│       ├── models.js         # ML utilities (mobile)
+│       ├── models.web.js     # ML utilities (web mock)
+│       ├── models.platform.js # Platform-aware loader
+│       ├── tipGenerator.js   # Eco-tip generation
+│       └── errorHandler.js   # Error handling
+├── 📚 docs/                  # Documentation
+│   ├── PROJECT_STRUCTURE.md # Detailed structure guide
+│   ├── MIGRATION_SUMMARY.md # Structure cleanup details
+│   └── *.md                 # Testing and implementation docs
+└── 🧪 tests/                 # Testing utilities
+    ├── test-app.js          # App functionality tests
+    └── test-web.js          # Web version tests
+```
 
-src/                     # Legacy components and utilities
-├── components/
-│   └── ErrorBoundary.js # Runtime error handling
-├── screens/             # Screen components (legacy structure)
-│   ├── HomeScreen.js
-│   ├── CameraScreen.js
-│   └── ResultsScreen.js
-├── utils/
-│   ├── models.js        # ML model utilities
-│   ├── tipGenerator.js  # Eco-tip generation
-│   └── errorHandler.js  # Error categorization
-└── navigation/
-    └── RootNavigator.js # Navigation setup (legacy)
-```
+**Note**: This project has been professionally reorganized. See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for detailed structure documentation.
 
 ### Key Files
 - **`src/utils/models.js`**: TensorFlow Lite model loading, preprocessing, and inference

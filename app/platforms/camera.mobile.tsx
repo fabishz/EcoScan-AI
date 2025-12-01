@@ -16,14 +16,15 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Camera } from 'expo-camera';
+import { Camera, CameraView } from 'expo-camera';
 import { router } from 'expo-router';
-import { classifyImage, getModelInfo } from '../src/utils/models';
+// Dynamic import to avoid bundling issues
+// import { classifyImage, getModelInfo } from '../../lib/utils/models';
 
 const CameraScreenMobile = () => {
   // Camera permission and setup state
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [cameraRef, setCameraRef] = useState<Camera | null>(null);
+  const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
   
   // Inference state management
   const [isInferencing, setIsInferencing] = useState(false);
@@ -46,11 +47,70 @@ const CameraScreenMobile = () => {
   const INFERENCE_TIMEOUT = 10000; // 10 second timeout for inference
   
   /**
-   * Request camera permission on component mount
-   * Requirement: 2.1 - Request camera permission from user
+   * Initialize camera and ML model on component mount
+   * Requirements: 2.1, 3.1 - Request camera permission and initialize ML model
    */
   useEffect(() => {
-    requestCameraPermission();
+    const initializeApp = async () => {
+      // Request camera permission
+      await requestCameraPermission();
+      
+      // Initialize ML model in background
+      try {
+        setDetectionResult({
+          category: '🤖 AI Brain Starting...',
+          confidence: 0,
+          timestamp: Date.now(),
+          userMessage: 'Loading the AI model for the first time',
+          icon: '🧠',
+          isLoading: true
+        });
+        
+        const { initializeModel } = await import('../../lib/utils/models');
+        const success = await initializeModel();
+        
+        if (success) {
+          setDetectionResult({
+            category: '✅ AI Ready!',
+            confidence: 0,
+            timestamp: Date.now(),
+            userMessage: 'Point camera at waste items to scan',
+            icon: '🎯',
+            isReady: true
+          });
+          
+          // Clear ready message after 3 seconds
+          setTimeout(() => {
+            setDetectionResult(null);
+          }, 3000);
+        } else {
+          setDetectionResult({
+            category: '🚨 AI Model Failed',
+            confidence: 0,
+            timestamp: Date.now(),
+            userMessage: 'Check internet connection and restart app',
+            icon: '📡',
+            isError: true,
+            isRecoverable: true,
+            recoveryAction: 'network'
+          });
+        }
+      } catch (error) {
+        console.error('Model initialization error:', error);
+        setDetectionResult({
+          category: '🔧 Setup Issue',
+          confidence: 0,
+          timestamp: Date.now(),
+          userMessage: 'AI model setup failed - restart app',
+          icon: '⚙️',
+          isError: true,
+          isRecoverable: true,
+          recoveryAction: 'restart'
+        });
+      }
+    };
+    
+    initializeApp();
   }, []);
 
   /**
@@ -148,6 +208,7 @@ const CameraScreenMobile = () => {
       const photo = await Promise.race([capturePromise, inferenceTimeout]);
       
       // Run ML inference on the captured frame with timeout
+      const { classifyImage } = await import('../../lib/utils/models');
       const inferencePromise = classifyImage(photo.uri);
       const result = await Promise.race([inferencePromise, inferenceTimeout]);
       
@@ -223,47 +284,133 @@ const CameraScreenMobile = () => {
   };
 
   /**
-   * Handle inference errors with user-friendly messages
+   * Handle inference errors with stunning user-friendly messages
    * Requirements: 7.1, 7.2, 7.3, 7.4
    */
   const handleInferenceError = (error: Error, errorCount: number) => {
-    let errorMessage = 'Detection error';
+    let errorMessage = '🤖 AI Detection Error';
+    let userMessage = 'Something went wrong with the AI detection';
+    let icon = '⚠️';
     let isRecoverable = true;
+    let recoveryAction = 'retry';
     
-    // Categorize error types
-    if (error.message.includes('timeout')) {
-      errorMessage = 'Detection taking too long - try again';
+    // Parse structured error from models.js
+    if (error.message.includes('Model not initialized') || error.message.includes('model loading failed')) {
+      errorMessage = '🤖 AI Brain Loading...';
+      userMessage = 'The AI is waking up - this may take a moment';
+      icon = '🧠';
+      isRecoverable = true;
+      recoveryAction = 'wait';
+    } else if (error.message.includes('timeout')) {
+      errorMessage = '⏱️ Detection Timeout';
+      userMessage = 'AI is thinking too hard - try a clearer photo';
+      icon = '🤔';
+      isRecoverable = true;
+      recoveryAction = 'retry';
     } else if (error.message.includes('camera')) {
-      errorMessage = 'Camera error - check permissions';
+      errorMessage = '📷 Camera Issue';
+      userMessage = 'Camera needs permission to work its magic';
+      icon = '📸';
       isRecoverable = false;
-    } else if (error.message.includes('model') || error.message.includes('tensor')) {
-      errorMessage = 'AI model error - restart app if this persists';
+      recoveryAction = 'permission';
+    } else if (error.message.includes('memory') || error.message.includes('Memory')) {
+      errorMessage = '🧠 Memory Full';
+      userMessage = 'Device memory is full - close some apps';
+      icon = '💾';
       isRecoverable = false;
-    } else if (error.message.includes('memory')) {
-      errorMessage = 'Low memory - close other apps';
-      isRecoverable = false;
+      recoveryAction = 'memory';
+    } else if (error.message.includes('network') || error.message.includes('fetch')) {
+      errorMessage = '🌐 Connection Issue';
+      userMessage = 'AI model needs internet to download - check connection';
+      icon = '📡';
+      isRecoverable = true;
+      recoveryAction = 'network';
+    } else if (error.message.includes('No image')) {
+      errorMessage = '📷 No Image';
+      userMessage = 'Point camera at an object to scan';
+      icon = '🎯';
+      isRecoverable = true;
+      recoveryAction = 'capture';
     }
     
-    // Show error in detection result
+    // Show stunning error in detection result
     setDetectionResult({
       category: errorMessage,
       confidence: 0,
       timestamp: Date.now(),
       error: error.message,
-      isError: true
+      userMessage: userMessage,
+      icon: icon,
+      isError: true,
+      recoveryAction: recoveryAction,
+      isRecoverable: isRecoverable
     });
     
-    // Show alert for persistent errors
-    if (errorCount >= MAX_INFERENCE_ERRORS && !isRecoverable) {
-      Alert.alert(
-        'Detection Error',
-        `Multiple detection errors occurred: ${errorMessage}. Please restart the app or check your device settings.`,
-        [
-          { text: 'Continue Anyway', style: 'cancel' },
-          { text: 'Go Back', onPress: () => router.back() }
-        ]
-      );
+    // Show beautiful alert for persistent errors
+    if (errorCount >= MAX_INFERENCE_ERRORS) {
+      const alertTitle = isRecoverable ? '🔄 Let\'s Try Again' : '🚨 Need Your Help';
+      const alertMessage = getRecoveryMessage(recoveryAction, userMessage);
+      const buttons = getRecoveryButtons(recoveryAction, isRecoverable);
+      
+      Alert.alert(alertTitle, alertMessage, buttons);
     }
+  };
+
+  /**
+   * Get recovery message based on error type
+   */
+  const getRecoveryMessage = (recoveryAction: string, userMessage: string) => {
+    switch (recoveryAction) {
+      case 'wait':
+        return `${userMessage}\n\n🎯 The AI model is initializing for the first time. This usually takes 10-30 seconds.`;
+      case 'retry':
+        return `${userMessage}\n\n💡 Try:\n• Better lighting\n• Steadier camera\n• Closer to object`;
+      case 'permission':
+        return `${userMessage}\n\n⚙️ Go to Settings → Apps → EcoScan AI → Permissions → Enable Camera`;
+      case 'memory':
+        return `${userMessage}\n\n🧹 Try:\n• Close other apps\n• Restart your device\n• Free up storage space`;
+      case 'network':
+        return `${userMessage}\n\n📶 Try:\n• Check WiFi connection\n• Switch to mobile data\n• Restart the app`;
+      case 'capture':
+        return `${userMessage}\n\n📸 Point your camera at waste items like bottles, cans, or food scraps`;
+      default:
+        return `${userMessage}\n\n🔄 Try scanning again or restart the app if this continues.`;
+    }
+  };
+
+  /**
+   * Get recovery buttons based on error type
+   */
+  const getRecoveryButtons = (recoveryAction: string, isRecoverable: boolean) => {
+    const buttons: any[] = [];
+    
+    if (isRecoverable) {
+      buttons.push({ 
+        text: '🔄 Try Again', 
+        onPress: () => {
+          setInferenceErrors(0);
+          setDetectionResult(null);
+        }
+      });
+    }
+    
+    if (recoveryAction === 'permission') {
+      buttons.push({ 
+        text: '⚙️ Open Settings', 
+        onPress: () => {
+          // Note: In a real app, you'd use Linking.openSettings()
+          Alert.alert('Settings', 'Please enable camera permission in your device settings');
+        }
+      });
+    }
+    
+    buttons.push({ 
+      text: isRecoverable ? '🏠 Go Home' : '🔙 Go Back', 
+      onPress: () => router.back(),
+      style: 'cancel'
+    });
+    
+    return buttons;
   };
 
   /**
@@ -286,6 +433,7 @@ const CameraScreenMobile = () => {
       });
       
       // Run final inference on captured image
+      const { classifyImage } = await import('../../lib/utils/models');
       const finalResult = await classifyImage(photo.uri);
       
       // Navigate to results screen with captured image and classification
@@ -369,9 +517,10 @@ const CameraScreenMobile = () => {
   return (
     <View style={styles.container}>
       {/* Live camera feed */}
-      <Camera
+      <CameraView
         style={styles.camera}
         ref={setCameraRef}
+        facing="back"
       >
         {/* Camera overlay with detection results */}
         <View style={styles.overlay}>
@@ -386,36 +535,79 @@ const CameraScreenMobile = () => {
             </View>
           )}
           
-          {/* Detection result display */}
+          {/* Detection result display with stunning error messages */}
           {detectionResult && (
             <View style={styles.detectionContainer}>
               <View style={[
                 styles.detectionBadge,
                 { 
-                  backgroundColor: detectionResult.isError 
-                    ? '#F44336' 
-                    : detectionResult.isHelpMessage 
-                      ? '#FF9800'
-                      : detectionResult.isLowConfidence
-                        ? '#FFC107'
-                        : getCategoryColor(detectionResult.category)
+                  backgroundColor: detectionResult.isLoading
+                    ? '#9C27B0' // Purple for loading
+                    : detectionResult.isReady
+                      ? '#4CAF50' // Green for ready
+                      : detectionResult.isError 
+                        ? detectionResult.isRecoverable ? '#FF9800' : '#F44336'
+                        : detectionResult.isHelpMessage 
+                          ? '#2196F3'
+                          : detectionResult.isLowConfidence
+                            ? '#FFC107'
+                            : getCategoryColor(detectionResult.category)
                 }
               ]}>
-                {detectionResult.isHelpMessage && (
+                {/* Dynamic icon based on error type */}
+                {detectionResult.icon && (
+                  <Text style={styles.dynamicIcon}>{detectionResult.icon}</Text>
+                )}
+                {detectionResult.isHelpMessage && !detectionResult.icon && (
                   <Text style={styles.helpIcon}>💡</Text>
                 )}
-                {detectionResult.isError && (
+                {detectionResult.isError && !detectionResult.icon && (
                   <Text style={styles.errorIcon}>⚠️</Text>
                 )}
-                <Text style={styles.detectionCategory}>
-                  {detectionResult.category}
-                </Text>
-                {detectionResult.confidence > 0 && !detectionResult.isError && !detectionResult.isHelpMessage && (
-                  <Text style={styles.detectionConfidence}>
-                    {Math.round(detectionResult.confidence * 100)}%
+                
+                <View style={styles.messageContainer}>
+                  <Text style={styles.detectionCategory}>
+                    {detectionResult.category}
                   </Text>
-                )}
+                  
+                  {/* Show user-friendly message for errors */}
+                  {detectionResult.userMessage && (
+                    <Text style={styles.userMessage}>
+                      {detectionResult.userMessage}
+                    </Text>
+                  )}
+                  
+                  {/* Show confidence for successful detections */}
+                  {detectionResult.confidence > 0 && !detectionResult.isError && !detectionResult.isHelpMessage && (
+                    <Text style={styles.detectionConfidence}>
+                      {Math.round(detectionResult.confidence * 100)}% confident
+                    </Text>
+                  )}
+                  
+                  {/* Show recovery hint for errors */}
+                  {detectionResult.isError && detectionResult.isRecoverable && (
+                    <Text style={styles.recoveryHint}>
+                      Tap for help 👆
+                    </Text>
+                  )}
+                </View>
               </View>
+              
+              {/* Recovery action button for errors */}
+              {detectionResult.isError && detectionResult.isRecoverable && (
+                <TouchableOpacity 
+                  style={styles.recoveryButton}
+                  onPress={() => {
+                    const message = getRecoveryMessage(detectionResult.recoveryAction || 'retry', detectionResult.userMessage || '');
+                    const buttons = getRecoveryButtons(detectionResult.recoveryAction || 'retry', true);
+                    Alert.alert('🔄 Let\'s Fix This', message, buttons);
+                  }}
+                >
+                  <Text style={styles.recoveryButtonText}>
+                    {detectionResult.recoveryAction === 'wait' ? '⏳ Please Wait' : '🔧 Get Help'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
           
@@ -457,15 +649,24 @@ const CameraScreenMobile = () => {
             {/* Info button */}
             <TouchableOpacity 
               style={styles.infoButton}
-              onPress={() => {
-                const modelInfo = getModelInfo() as any;
-                Alert.alert(
-                  'Detection Info',
-                  `Model loaded: ${modelInfo.isLoaded ? 'Yes' : 'No'}\n` +
-                  `Categories: ${modelInfo.categories.join(', ')}\n` +
-                  `Confidence threshold: ${Math.round(CONFIDENCE_DISPLAY_THRESHOLD * 100)}%`,
-                  [{ text: 'OK' }]
-                );
+              onPress={async () => {
+                try {
+                  const { getModelInfo } = await import('../../lib/utils/models');
+                  const modelInfo = getModelInfo() as any;
+                  Alert.alert(
+                    'Detection Info',
+                    `Model loaded: ${modelInfo.isLoaded ? 'Yes' : 'No'}\n` +
+                    `Categories: ${modelInfo.categories.join(', ')}\n` +
+                    `Confidence threshold: ${Math.round(CONFIDENCE_DISPLAY_THRESHOLD * 100)}%`,
+                    [{ text: 'OK' }]
+                  );
+                } catch (error) {
+                  Alert.alert(
+                    'Model Info',
+                    'Model information not available',
+                    [{ text: 'OK' }]
+                  );
+                }
               }}
             >
               <Text style={styles.controlButtonText}>Info</Text>
@@ -474,7 +675,7 @@ const CameraScreenMobile = () => {
           </View>
           
         </View>
-      </Camera>
+      </CameraView>
     </View>
   );
 };
@@ -539,38 +740,84 @@ const styles = StyleSheet.create({
   
   detectionBadge: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5
+    shadowRadius: 8,
+    elevation: 8,
+    minWidth: 200,
+    maxWidth: '90%'
+  },
+  
+  messageContainer: {
+    flex: 1,
+    marginLeft: 8
   },
   
   detectionCategory: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-    marginRight: 8
+    marginBottom: 2
+  },
+  
+  userMessage: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    opacity: 0.9,
+    fontStyle: 'italic',
+    marginBottom: 2
   },
   
   detectionConfidence: {
     color: '#FFFFFF',
-    fontSize: 14,
-    opacity: 0.9
+    fontSize: 12,
+    opacity: 0.8,
+    fontWeight: '600'
+  },
+  
+  recoveryHint: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    opacity: 0.7,
+    fontWeight: '500',
+    marginTop: 2
+  },
+  
+  dynamicIcon: {
+    fontSize: 20,
+    marginRight: 8
   },
   
   helpIcon: {
-    fontSize: 16,
-    marginRight: 6
+    fontSize: 18,
+    marginRight: 8
   },
   
   errorIcon: {
-    fontSize: 16,
-    marginRight: 6
+    fontSize: 18,
+    marginRight: 8
+  },
+  
+  recoveryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)'
+  },
+  
+  recoveryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center'
   },
   
   // Inference indicator styles

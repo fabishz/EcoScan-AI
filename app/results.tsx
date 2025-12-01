@@ -20,7 +20,7 @@ import {
   Dimensions
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { generateTip } from '../src/utils/tipGenerator';
+import { generateTip } from '../lib/utils/tipGenerator';
 
 const { width } = Dimensions.get('window');
 

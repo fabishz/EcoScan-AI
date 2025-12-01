@@ -21,10 +21,10 @@ const requiredFiles = [
   'app/camera.tsx', 
   'app/results.tsx',
   'app/_layout.tsx',
-  'src/utils/models.js',
-  'src/utils/tipGenerator.js',
-  'src/utils/errorHandler.js',
-  'src/components/ErrorBoundary.js'
+  'lib/utils/models.js',
+  'lib/utils/tipGenerator.js',
+  'lib/utils/errorHandler.js',
+  'lib/components/ErrorBoundary.js'
 ];
 
 let structureTest = true;
@@ -74,7 +74,7 @@ console.log('🔧 Test 3: Testing utility functions...');
 
 try {
   // Test tip generator
-  const { generateTip } = require('./src/utils/tipGenerator.js');
+  const { generateTip } = require('../lib/utils/tipGenerator.js');
   
   const recyclableTip = generateTip('Recyclable');
   const compostableTip = generateTip('Compostable');

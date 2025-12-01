@@ -6,26 +6,86 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 7.1, 7.2, 7.3, 7.4
  */
 
-import React from 'react';
-import { Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Platform, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 
 // Platform-aware component import
 const CameraScreen = () => {
-  if (Platform.OS === 'web') {
-    // Use web-compatible version
-    const CameraScreenWeb = require('./camera.web').default;
-    return <CameraScreenWeb />;
-  } else {
-    // Use mobile version with expo-camera
-    const CameraScreenMobile = require('./camera.mobile').default;
-    return <CameraScreenMobile />;
+  const [PlatformComponent, setPlatformComponent] = useState<React.ComponentType | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadPlatformComponent = async () => {
+      try {
+        if (Platform.OS === 'web') {
+          // Use web-compatible version
+          const { default: CameraScreenWeb } = await import('./platforms/camera.web');
+          setPlatformComponent(() => CameraScreenWeb);
+        } else {
+          // Use mobile version with expo-camera
+          const { default: CameraScreenMobile } = await import('./platforms/camera.mobile');
+          setPlatformComponent(() => CameraScreenMobile);
+        }
+      } catch (error) {
+        console.error('Error loading platform component:', error);
+        // Fallback to a simple error component
+        setPlatformComponent(() => () => (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>Camera not available on this platform</Text>
+          </View>
+        ));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPlatformComponent();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4CAF50" />
+        <Text style={styles.loadingText}>Loading camera...</Text>
+      </View>
+    );
   }
+
+  if (!PlatformComponent) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Camera component not available</Text>
+      </View>
+    );
+  }
+
+  return <PlatformComponent />;
 };
 
-export default CameraScreen;
-
-
-
-
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5'
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666666',
+    marginTop: 16
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 40
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#666666',
+    textAlign: 'center'
+  }
+});
 
 export default CameraScreen;
