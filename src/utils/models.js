@@ -218,25 +218,69 @@ export async function classifyImage(imageUri) {
   let preprocessedImage = null;
   
   try {
-    // Preprocess image
-    preprocessedImage = await preprocessImage(imageUri);
+    // Validate input
+    if (!imageUri) {
+      throw new Error('No image URI provided');
+    }
     
-    // Run inference
-    const predictions = await runInference(preprocessedImage);
+    if (!model) {
+      throw new Error('Model not initialized. Please restart the app.');
+    }
+    
+    // Preprocess image with timeout
+    const preprocessPromise = preprocessImage(imageUri);
+    const preprocessTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Image preprocessing timeout')), 5000);
+    });
+    
+    preprocessedImage = await Promise.race([preprocessPromise, preprocessTimeout]);
+    
+    // Run inference with timeout
+    const inferencePromise = runInference(preprocessedImage);
+    const inferenceTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Model inference timeout')), 8000);
+    });
+    
+    const predictions = await Promise.race([inferencePromise, inferenceTimeout]);
     
     // Postprocess results
     const result = await postprocessResults(predictions);
+    
+    // Add additional metadata for error handling
+    result.processingTime = Date.now() - result.timestamp;
+    result.modelStatus = 'success';
     
     return result;
     
   } catch (error) {
     console.error('Error in classification pipeline:', error);
     
+    // Categorize error types for better user messaging
+    let errorCategory = 'unknown';
+    let userMessage = 'Classification failed';
+    
+    if (error.message.includes('timeout')) {
+      errorCategory = 'timeout';
+      userMessage = 'Classification taking too long';
+    } else if (error.message.includes('model') || error.message.includes('Model')) {
+      errorCategory = 'model';
+      userMessage = 'AI model error';
+    } else if (error.message.includes('image') || error.message.includes('preprocess')) {
+      errorCategory = 'image';
+      userMessage = 'Image processing error';
+    } else if (error.message.includes('memory') || error.message.includes('Memory')) {
+      errorCategory = 'memory';
+      userMessage = 'Low memory error';
+    }
+    
     return {
       category: 'Unknown',
       confidence: 0.0,
       timestamp: Date.now(),
-      error: error.message
+      error: error.message,
+      errorCategory: errorCategory,
+      userMessage: userMessage,
+      modelStatus: 'error'
     };
     
   } finally {
@@ -259,6 +303,62 @@ export function getModelInfo() {
     categories: Object.values(WASTE_CATEGORIES),
     confidenceThreshold: CONFIDENCE_THRESHOLD
   };
+}
+
+/**
+ * Analyze image quality and lighting conditions
+ * 
+ * @param {string} imageUri - URI of the image to analyze
+ * @returns {Promise<Object>} Image quality analysis
+ */
+export async function analyzeImageQuality(imageUri) {
+  try {
+    // Load image as tensor for analysis
+    const imageTensor = tf.browser.fromPixels(imageUri);
+    
+    // Calculate average brightness
+    const grayscale = imageTensor.mean(2); // Convert to grayscale by averaging RGB channels
+    const avgBrightness = await grayscale.mean().data();
+    const brightness = avgBrightness[0] / 255; // Normalize to 0-1
+    
+    // Calculate contrast (standard deviation of pixel values)
+    const variance = await grayscale.sub(grayscale.mean()).square().mean().data();
+    const contrast = Math.sqrt(variance[0]) / 255; // Normalize to 0-1
+    
+    // Clean up tensors
+    imageTensor.dispose();
+    grayscale.dispose();
+    
+    // Determine quality issues
+    const isLowLight = brightness < 0.2;
+    const isOverexposed = brightness > 0.9;
+    const isLowContrast = contrast < 0.1;
+    const isBlurry = contrast < 0.05; // Very low contrast might indicate blur
+    
+    return {
+      brightness: brightness,
+      contrast: contrast,
+      isLowLight: isLowLight,
+      isOverexposed: isOverexposed,
+      isLowContrast: isLowContrast,
+      isBlurry: isBlurry,
+      quality: isLowLight || isOverexposed || isLowContrast ? 'poor' : 
+               contrast > 0.3 && brightness > 0.3 && brightness < 0.8 ? 'good' : 'fair'
+    };
+    
+  } catch (error) {
+    console.error('Error analyzing image quality:', error);
+    return {
+      brightness: 0.5,
+      contrast: 0.5,
+      isLowLight: false,
+      isOverexposed: false,
+      isLowContrast: false,
+      isBlurry: false,
+      quality: 'unknown',
+      error: error.message
+    };
+  }
 }
 
 /**

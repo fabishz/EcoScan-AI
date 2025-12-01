@@ -41,7 +41,34 @@ const tipTemplates = {
   Unknown: [
     "I'm not sure about this item—check your local recycling guidelines or ask your waste management provider.",
     "When in doubt, research this item online or contact your local environmental services for proper disposal.",
-    "This item needs manual inspection—look for recycling symbols or check with your local waste facility."
+    "This item needs manual inspection—look for recycling symbols or check with your local waste facility.",
+    "Try scanning again with better lighting or a clearer view of the item for more accurate results.",
+    "If the item is unclear, clean it first and scan again, or check the packaging for disposal instructions."
+  ],
+  
+  // Error and edge case tips
+  'Detection error': [
+    "Scanning had an issue—try again with better lighting and a steady hand.",
+    "Technical error occurred—ensure good lighting and try scanning the item again.",
+    "Detection failed—clean the camera lens and try scanning in better light conditions."
+  ],
+  
+  'No clear object detected': [
+    "Try moving the camera closer to the item and ensure it's well-lit for better detection.",
+    "Make sure the item fills most of the camera frame and try scanning again.",
+    "Improve lighting conditions and hold the camera steady for clearer object detection."
+  ],
+  
+  'Try adjusting camera angle or lighting': [
+    "Better lighting and camera angle will help identify this item more accurately.",
+    "Move to a well-lit area and try different angles to get a clearer scan of the item.",
+    "Clean lighting and a steady camera position will improve waste classification results."
+  ],
+  
+  'Low light detected': [
+    "Low light affects scanning accuracy—try moving to a brighter area for better results.",
+    "Good lighting is key for accurate waste classification—find a well-lit spot and try again.",
+    "Bright, even lighting helps the AI identify waste items more accurately."
   ]
 };
 
@@ -64,7 +91,39 @@ export const generateTip = (category) => {
     return tipTemplates.Unknown[0]; // Default fallback tip
   }
   
-  // Normalize category name (handle case variations)
+  // Handle exact matches for error messages first
+  if (tipTemplates[category]) {
+    const categoryTips = tipTemplates[category];
+    const randomIndex = Math.floor(Math.random() * categoryTips.length);
+    return categoryTips[randomIndex];
+  }
+  
+  // Handle partial matches for dynamic error messages
+  if (category.includes('error') || category.includes('Error')) {
+    const errorTips = tipTemplates['Detection error'];
+    const randomIndex = Math.floor(Math.random() * errorTips.length);
+    return errorTips[randomIndex];
+  }
+  
+  if (category.includes('No clear object') || category.includes('no clear object')) {
+    const noDetectionTips = tipTemplates['No clear object detected'];
+    const randomIndex = Math.floor(Math.random() * noDetectionTips.length);
+    return noDetectionTips[randomIndex];
+  }
+  
+  if (category.includes('adjusting') || category.includes('lighting')) {
+    const adjustTips = tipTemplates['Try adjusting camera angle or lighting'];
+    const randomIndex = Math.floor(Math.random() * adjustTips.length);
+    return adjustTips[randomIndex];
+  }
+  
+  if (category.includes('Possible')) {
+    // For "Possible Recyclable" etc., extract the base category
+    const baseCategory = category.replace('Possible ', '');
+    return generateTip(baseCategory) + " (Low confidence - consider scanning again for better results.)";
+  }
+  
+  // Normalize category name for standard categories (handle case variations)
   const normalizedCategory = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
   
   // Get tips for the category, fallback to Unknown if category not found

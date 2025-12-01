@@ -32,6 +32,9 @@ const CameraScreen = ({ navigation }) => {
   const [isInferencing, setIsInferencing] = useState(false);
   const [lastInferenceTime, setLastInferenceTime] = useState(0);
   const [detectionResult, setDetectionResult] = useState(null);
+  const [inferenceErrors, setInferenceErrors] = useState(0);
+  const [lowLightWarning, setLowLightWarning] = useState(false);
+  const [noDetectionCount, setNoDetectionCount] = useState(0);
   
   // UI state
   const [isCapturing, setIsCapturing] = useState(false);
@@ -40,6 +43,10 @@ const CameraScreen = ({ navigation }) => {
   // Inference throttling configuration (Arm optimization)
   const INFERENCE_INTERVAL = 1500; // 1.5 seconds between inferences
   const CONFIDENCE_DISPLAY_THRESHOLD = 0.3; // Show results above 30% confidence
+  const LOW_CONFIDENCE_THRESHOLD = 0.1; // Below this is considered no detection
+  const MAX_INFERENCE_ERRORS = 3; // Max consecutive errors before showing error message
+  const NO_DETECTION_THRESHOLD = 5; // Show help message after 5 consecutive no detections
+  const INFERENCE_TIMEOUT = 10000; // 10 second timeout for inference
   
   /**
    * Request camera permission on component mount
@@ -110,7 +117,7 @@ const CameraScreen = ({ navigation }) => {
    * Arm Optimization: Only run inference every 1-2 seconds, not on every frame
    * This reduces CPU load by ~80% while maintaining responsive user experience
    * 
-   * Requirements: 2.4, 3.1, 3.2, 7.1, 7.2
+   * Requirements: 2.4, 3.1, 3.2, 7.1, 7.2, 7.3, 7.4
    */
   const scheduleInference = async () => {
     const currentTime = Date.now();
@@ -125,25 +132,69 @@ const CameraScreen = ({ navigation }) => {
       return;
     }
     
+    // Create inference timeout promise
+    const inferenceTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Inference timeout')), INFERENCE_TIMEOUT);
+    });
+    
     try {
       setIsInferencing(true);
       setLastInferenceTime(currentTime);
       
-      // Capture current camera frame for inference
-      const photo = await cameraRef.takePictureAsync({
+      // Capture current camera frame for inference with timeout
+      const capturePromise = cameraRef.takePictureAsync({
         quality: 0.7, // Reduce quality for faster processing
         base64: false,
         skipProcessing: true // Skip unnecessary processing for inference
       });
       
-      // Run ML inference on the captured frame
-      const result = await classifyImage(photo.uri);
+      const photo = await Promise.race([capturePromise, inferenceTimeout]);
       
-      // Update detection result if confidence is above threshold
-      if (result.confidence >= CONFIDENCE_DISPLAY_THRESHOLD) {
-        setDetectionResult(result);
+      // Run ML inference on the captured frame with timeout
+      const inferencePromise = classifyImage(photo.uri);
+      const result = await Promise.race([inferencePromise, inferenceTimeout]);
+      
+      // Reset error count on successful inference
+      setInferenceErrors(0);
+      
+      // Handle detection results and edge cases
+      handleDetectionResult(result);
+      
+    } catch (error) {
+      console.error('Error during inference:', error);
+      
+      // Increment error count
+      const newErrorCount = inferenceErrors + 1;
+      setInferenceErrors(newErrorCount);
+      
+      // Handle different types of errors
+      handleInferenceError(error, newErrorCount);
+      
+    } finally {
+      setIsInferencing(false);
+    }
+  };
+
+  /**
+   * Handle detection results and edge cases
+   * Requirements: 7.1, 7.2, 7.3
+   */
+  const handleDetectionResult = (result) => {
+    // Check for low confidence (no clear detection)
+    if (result.confidence < LOW_CONFIDENCE_THRESHOLD) {
+      const newNoDetectionCount = noDetectionCount + 1;
+      setNoDetectionCount(newNoDetectionCount);
+      
+      // Show help message after multiple no detections
+      if (newNoDetectionCount >= NO_DETECTION_THRESHOLD) {
+        setDetectionResult({
+          category: 'Try adjusting camera angle or lighting',
+          confidence: result.confidence,
+          timestamp: result.timestamp,
+          isHelpMessage: true
+        });
+        setNoDetectionCount(0); // Reset counter
       } else {
-        // Clear previous results if confidence is too low
         setDetectionResult({
           category: 'No clear object detected',
           confidence: result.confidence,
@@ -151,19 +202,70 @@ const CameraScreen = ({ navigation }) => {
         });
       }
       
-    } catch (error) {
-      console.error('Error during inference:', error);
+      // Check for potential low-light conditions
+      if (result.confidence < 0.05) {
+        setLowLightWarning(true);
+        setTimeout(() => setLowLightWarning(false), 3000); // Clear warning after 3 seconds
+      }
       
-      // Handle inference errors gracefully
+    } else if (result.confidence >= CONFIDENCE_DISPLAY_THRESHOLD) {
+      // Clear detection and reset counters on successful detection
+      setDetectionResult(result);
+      setNoDetectionCount(0);
+      setLowLightWarning(false);
+      
+    } else {
+      // Low confidence but not extremely low
       setDetectionResult({
-        category: 'Detection error',
-        confidence: 0,
-        timestamp: Date.now(),
-        error: error.message
+        category: `Possible ${result.category}`,
+        confidence: result.confidence,
+        timestamp: result.timestamp,
+        isLowConfidence: true
       });
-      
-    } finally {
-      setIsInferencing(false);
+    }
+  };
+
+  /**
+   * Handle inference errors with user-friendly messages
+   * Requirements: 7.1, 7.2, 7.3, 7.4
+   */
+  const handleInferenceError = (error, errorCount) => {
+    let errorMessage = 'Detection error';
+    let isRecoverable = true;
+    
+    // Categorize error types
+    if (error.message.includes('timeout')) {
+      errorMessage = 'Detection taking too long - try again';
+    } else if (error.message.includes('camera')) {
+      errorMessage = 'Camera error - check permissions';
+      isRecoverable = false;
+    } else if (error.message.includes('model') || error.message.includes('tensor')) {
+      errorMessage = 'AI model error - restart app if this persists';
+      isRecoverable = false;
+    } else if (error.message.includes('memory')) {
+      errorMessage = 'Low memory - close other apps';
+      isRecoverable = false;
+    }
+    
+    // Show error in detection result
+    setDetectionResult({
+      category: errorMessage,
+      confidence: 0,
+      timestamp: Date.now(),
+      error: error.message,
+      isError: true
+    });
+    
+    // Show alert for persistent errors
+    if (errorCount >= MAX_INFERENCE_ERRORS && !isRecoverable) {
+      Alert.alert(
+        'Detection Error',
+        `Multiple detection errors occurred: ${errorMessage}. Please restart the app or check your device settings.`,
+        [
+          { text: 'Continue Anyway', style: 'cancel' },
+          { text: 'Go Back', onPress: () => navigation.goBack() }
+        ]
+      );
     }
   };
 
@@ -276,17 +378,41 @@ const CameraScreen = ({ navigation }) => {
         {/* Camera overlay with detection results */}
         <View style={styles.overlay}>
           
+          {/* Low light warning */}
+          {lowLightWarning && (
+            <View style={styles.warningContainer}>
+              <View style={styles.warningBadge}>
+                <Text style={styles.warningIcon}>💡</Text>
+                <Text style={styles.warningText}>Low light detected - try better lighting</Text>
+              </View>
+            </View>
+          )}
+          
           {/* Detection result display */}
           {detectionResult && (
             <View style={styles.detectionContainer}>
               <View style={[
                 styles.detectionBadge,
-                { backgroundColor: getCategoryColor(detectionResult.category) }
+                { 
+                  backgroundColor: detectionResult.isError 
+                    ? '#F44336' 
+                    : detectionResult.isHelpMessage 
+                      ? '#FF9800'
+                      : detectionResult.isLowConfidence
+                        ? '#FFC107'
+                        : getCategoryColor(detectionResult.category)
+                }
               ]}>
+                {detectionResult.isHelpMessage && (
+                  <Text style={styles.helpIcon}>💡</Text>
+                )}
+                {detectionResult.isError && (
+                  <Text style={styles.errorIcon}>⚠️</Text>
+                )}
                 <Text style={styles.detectionCategory}>
                   {detectionResult.category}
                 </Text>
-                {detectionResult.confidence > 0 && (
+                {detectionResult.confidence > 0 && !detectionResult.isError && !detectionResult.isHelpMessage && (
                   <Text style={styles.detectionConfidence}>
                     {Math.round(detectionResult.confidence * 100)}%
                   </Text>
@@ -370,10 +496,44 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent'
   },
   
+  // Warning container styles
+  warningContainer: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    alignItems: 'center'
+  },
+  
+  warningBadge: {
+    backgroundColor: 'rgba(255, 152, 0, 0.9)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5
+  },
+  
+  warningIcon: {
+    fontSize: 16,
+    marginRight: 6
+  },
+  
+  warningText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600'
+  },
+
   // Detection result styles
   detectionContainer: {
     position: 'absolute',
-    top: 60,
+    top: 110, // Fixed position below warning area
     left: 20,
     right: 20,
     alignItems: 'center'
@@ -403,6 +563,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     opacity: 0.9
+  },
+  
+  helpIcon: {
+    fontSize: 16,
+    marginRight: 6
+  },
+  
+  errorIcon: {
+    fontSize: 16,
+    marginRight: 6
   },
   
   // Inference indicator styles

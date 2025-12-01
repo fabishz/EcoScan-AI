@@ -76,7 +76,7 @@ This implementation plan breaks down the EcoScan AI MVP into discrete, manageabl
   - Display loading spinner while model is being loaded
   - _Requirements: 3.1, 3.4, 6.1_
 
-- [ ] 9. Implement error handling and edge case management
+- [-] 9. Implement error handling and edge case management
   - Add error boundary component to catch and display runtime errors
   - Implement fallback UI for: camera permission denied, model loading failure, inference timeout, no detection
   - Add user-friendly error messages and recovery options (retry, go to settings, etc.)

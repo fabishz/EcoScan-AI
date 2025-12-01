@@ -31,10 +31,14 @@ const { width } = Dimensions.get('window');
  */
 const ResultsScreen = ({ route, navigation }) => {
   // Extract data passed from CameraScreen
-  const { capturedImage, category, confidence } = route.params || {};
+  const { capturedImage, category, confidence, error } = route.params || {};
+  
+  // Handle missing or invalid data
+  const hasValidData = capturedImage && category;
+  const isErrorResult = error || category === 'Unknown' || !hasValidData;
   
   // Generate personalized eco-tip based on classification category
-  const ecoTip = generateTip(category);
+  const ecoTip = generateTip(category || 'Unknown');
   
   // Get category badge color based on classification
   const getCategoryColor = (category) => {
@@ -76,6 +80,19 @@ const ResultsScreen = ({ route, navigation }) => {
         
         {/* Classification Results */}
         <View style={styles.resultsContainer}>
+          
+          {/* Error message if classification failed */}
+          {isErrorResult && (
+            <View style={styles.errorSection}>
+              <Text style={styles.errorIcon}>⚠️</Text>
+              <Text style={styles.errorMessage}>
+                {error ? 'Classification error occurred' : 
+                 !hasValidData ? 'No valid scan data available' :
+                 'Unable to classify this item clearly'}
+              </Text>
+            </View>
+          )}
+          
           {/* Category Badge */}
           <View style={styles.categorySection}>
             <Text style={styles.categoryLabel}>Category:</Text>
@@ -84,11 +101,23 @@ const ResultsScreen = ({ route, navigation }) => {
             </View>
           </View>
           
-          {/* Confidence Score */}
-          <View style={styles.confidenceSection}>
-            <Text style={styles.confidenceLabel}>Confidence:</Text>
-            <Text style={styles.confidenceValue}>{confidencePercentage}%</Text>
-          </View>
+          {/* Confidence Score - only show if we have valid confidence */}
+          {confidence !== undefined && confidence > 0 && (
+            <View style={styles.confidenceSection}>
+              <Text style={styles.confidenceLabel}>Confidence:</Text>
+              <Text style={styles.confidenceValue}>{confidencePercentage}%</Text>
+            </View>
+          )}
+          
+          {/* Low confidence warning */}
+          {confidence !== undefined && confidence > 0 && confidence < 0.5 && (
+            <View style={styles.lowConfidenceWarning}>
+              <Text style={styles.warningText}>
+                Low confidence result - consider scanning again with better lighting or angle
+              </Text>
+            </View>
+          )}
+          
         </View>
         
         {/* Eco-Tip Section */}
@@ -207,6 +236,39 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#2E7D32',
+  },
+  errorSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F44336',
+  },
+  errorIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  errorMessage: {
+    flex: 1,
+    fontSize: 14,
+    color: '#D32F2F',
+    fontWeight: '500',
+  },
+  lowConfidenceWarning: {
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#F57C00',
+    fontStyle: 'italic',
   },
   tipContainer: {
     backgroundColor: '#E8F5E8',
